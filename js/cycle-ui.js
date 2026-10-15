@@ -1,47 +1,16 @@
-import { DAYS, SCHEDULE, GENTLE, COOLDOWN, MOBILITY, PHASE_TRAIN, GROW_NOTE } from "./workouts.js";
-import { figureSvg } from "./figures.js";
-import { analyze, ymd, parse, addDays, between, BLEED } from "./cycle.js";
+// Bloom's cycle tracker — calendar, predictions, insights, day log and setup questions.
+// Plugs into the shared app as an extra tab plus a few hooks (home pill, gentle days, phase tips).
+import { analyze, BLEED } from "./cycle.js";
+import { ymd, parse, addDays, between } from "./engine.js";
+import { $, $$, esc, md, wmd, plural, setupCanvas, css } from "./core.js";
+import { PHASE_TRAIN } from "./workouts.js";
 
-/* ---------- storage (only on this phone) ---------- */
-const KEY = "bloom:madison";
-const defaults = () => ({
-  name: "Madison", start: null, goal: null, weights: [], checks: {}, gentle: {}, days: {},
-  cycle: { lastStart: null, periodLen: 5, cycleLen: 28, regular: "unsure", bc: "none", goal: "track", trackTemp: false, tempUnit: "F" },
-  onboarded: false,
-});
-function load() {
-  try {
-    const s = JSON.parse(localStorage.getItem(KEY)) || {};
-    const d = defaults();
-    return { ...d, ...s, cycle: { ...d.cycle, ...(s.cycle || {}) } };
-  } catch { return defaults(); }
-}
-function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
-let state = load();
-let A = analyze(state);
-const refresh = () => (A = analyze(state));
-
-/* ---------- helpers ---------- */
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => document.querySelectorAll(s);
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const fmt = (n) => (n == null || isNaN(n) ? "—" : (Math.round(n * 10) / 10).toFixed(1));
-const sorted = () => [...state.weights].sort((a, b) => a.d.localeCompare(b.d));
-const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-const md = (s) => parse(s).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-const wmd = (s) => parse(s).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-const DAY_MS = 86400000;
-const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-
-function toast(msg, ms = 1900) {
-  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
-  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), ms);
-}
-function signed(n) {
-  if (n == null) return "—";
-  const v = Math.round(n * 10) / 10;
-  return `${v > 0 ? "+" : ""}${v.toFixed(1)}`;
-}
+let C = null, state = null, A = null;
+const save = () => C.save(), render = () => C.render(), toast = (m, ms) => C.toast(m, ms);
+const show = (v) => C.show(v);
+const refresh = () => { state = C.state; A = analyze(state); return A; };
+export const cycleA = () => A;
+const BIND = {};
 
 /* ---------- labels ---------- */
 const FLOW = [["none", "No period"], ["spotting", "Spotting"], ["light", "Light"], ["medium", "Medium"], ["heavy", "Heavy"]];
@@ -69,28 +38,6 @@ const PHASE = {
     body: "Hormonal birth control usually stops ovulation, so Bloom tracks your bleeding and symptoms but doesn't predict a fertile window." },
 };
 
-/* ---------- navigation ---------- */
-let current = "home";
-function show(view) {
-  current = view;
-  $$(".view").forEach((v) => (v.hidden = v.id !== `view-${view}`));
-  $$(".tabbar button").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
-  window.scrollTo({ top: 0 });
-  render();
-}
-function render() {
-  refresh();
-  $("#greeting").textContent = `Hey, ${state.name || "you"}`;
-  $("#today-date").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
-  if (current === "home") renderHome();
-  if (current === "cycle") renderCycle();
-  if (current === "workout") renderWorkout();
-  if (current === "log") renderLog();
-}
-$$(".tabbar button").forEach((b) => (b.onclick = () => show(b.dataset.view)));
-$("#today-link").onclick = () => { selectedDay = todayId(); show("workout"); };
-$("#cycle-pill").onclick = () => (state.onboarded ? show("cycle") : startOnboarding());
-
 /* ---------- short cycle status ---------- */
 function headline(a = A) {
   if (!a.ready) return "Set up your cycle";
@@ -104,152 +51,6 @@ function headline(a = A) {
   }
   return `Period in ${plural(a.dueIn, "day")}`;
 }
-
-/* ---------- PROGRESS ---------- */
-function stats() {
-  const w = sorted();
-  const start = state.start ?? w[0]?.w ?? null;
-  const cur = w.at(-1)?.w ?? null;
-  const lost = start != null && cur != null ? start - cur : null;
-  let pctDone = 0;
-  if (state.goal != null && start != null && cur != null && start !== state.goal)
-    pctDone = Math.max(0, Math.min(100, ((start - cur) / (start - state.goal)) * 100));
-  let week = null, rate = null;
-  if (w.length >= 2) {
-    const cutoff = parse(w.at(-1).d).getTime() - 7 * DAY_MS;
-    const base = [...w].reverse().find((e) => parse(e.d).getTime() <= cutoff) ?? w[0];
-    week = cur - base.w;
-    const days = (parse(w.at(-1).d) - parse(w[0].d)) / DAY_MS;
-    if (days >= 1) rate = ((cur - w[0].w) / days) * 7;
-  }
-  let streak = 0;
-  const set = new Set(w.map((e) => e.d));
-  const d = new Date();
-  if (!set.has(ymd(d))) d.setDate(d.getDate() - 1);
-  while (set.has(ymd(d))) { streak++; d.setDate(d.getDate() - 1); }
-  return { start, cur, lost, pctDone, week, rate, streak };
-}
-
-function renderHome() {
-  const s = stats();
-  const pill = $("#cycle-pill");
-  if (!A.ready) pill.innerHTML = `<span class="dot"></span><span><b>Cycle</b> · ${state.onboarded ? "Log your period to start predictions" : "Tap to set up your cycle"}</span>`;
-  else pill.innerHTML = `<span class="dot ${A.phase}"></span><span><b>Cycle day ${A.cd}</b> · ${esc(headline())}</span>`;
-  $("#water-note").hidden = !(A.ready && ["pms", "menstrual", "late"].includes(A.phase));
-
-  $("#stat-lost").innerHTML = s.lost == null ? "—" : `${fmt(Math.max(0, s.lost))}<small>lb</small>`;
-  $("#stat-start").textContent = fmt(s.start);
-  $("#stat-current").textContent = fmt(s.cur);
-  $("#stat-goal").textContent = fmt(state.goal);
-  $("#stat-togo").textContent = state.goal != null && s.cur != null ? fmt(Math.max(0, s.cur - state.goal)) : "—";
-  $("#stat-pct").textContent = `${Math.round(s.pctDone)}%`;
-  $("#ring-fg").style.strokeDashoffset = 326.7 * (1 - s.pctDone / 100);
-  const wk = $("#stat-week"); wk.textContent = signed(s.week); wk.className = "mid " + (s.week < 0 ? "down" : s.week > 0 ? "up" : "");
-  const rt = $("#stat-rate"); rt.textContent = signed(s.rate); rt.className = "mid " + (s.rate < 0 ? "down" : s.rate > 0 ? "up" : "");
-  $("#stat-streak").textContent = s.streak ? plural(s.streak, "day") : "—";
-
-  const today = state.weights.find((e) => e.d === ymd());
-  if (document.activeElement !== $("#weigh-input")) $("#weigh-input").value = today ? today.w : "";
-
-  const day = DAYS.find((d) => d.id === todayId());
-  const g = gentleToday() && !day.rest;
-  $("#today-title").textContent = g ? "Gentle day" : day.title;
-  $("#today-sub").textContent = g ? `Instead of ${day.title}` : day.sub;
-  $("#today-progress").textContent = `${progress(day, g).pct}%`;
-  drawChart();
-}
-
-$("#weigh-form").onsubmit = (e) => {
-  e.preventDefault();
-  const w = parseFloat($("#weigh-input").value);
-  if (!w) return;
-  const d = ymd();
-  state.weights = state.weights.filter((x) => x.d !== d).concat({ d, w });
-  if (state.start == null) state.start = w;
-  save(); $("#weigh-input").blur(); render(); toast("Weight saved");
-};
-
-/* weight chart — plain canvas, period days shaded */
-let range = 90, tapIdx = null;
-$$("#range-seg button").forEach((b) => (b.onclick = () => {
-  $$("#range-seg button").forEach((x) => x.classList.toggle("on", x === b));
-  range = +b.dataset.r; tapIdx = null; drawChart();
-}));
-
-function setupCanvas(cv) {
-  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
-  cv.width = W * dpr; cv.height = H * dpr;
-  const c = cv.getContext("2d"); c.scale(dpr, dpr); c.clearRect(0, 0, W, H);
-  return { c, W, H };
-}
-
-function drawChart() {
-  const cv = $("#chart");
-  let data = sorted();
-  if (range) { const cut = Date.now() - range * DAY_MS; data = data.filter((e) => parse(e.d).getTime() >= cut); }
-  $("#chart-empty").hidden = data.length >= 2;
-  const { c, W, H } = setupCanvas(cv);
-  if (data.length < 2) return;
-  const accent = css("--accent"), line = css("--line"), mid = css("--mid"), period = css("--period");
-  const pad = { l: 40, r: 14, t: 16, b: 26 };
-  const vals = data.map((e) => e.w);
-  if (state.goal != null) vals.push(state.goal);
-  let lo = Math.min(...vals), hi = Math.max(...vals);
-  const span = Math.max(hi - lo, 4); lo -= span * 0.12; hi += span * 0.12;
-  const t0 = parse(data[0].d).getTime(), t1 = parse(data.at(-1).d).getTime();
-  const x = (d) => pad.l + ((parse(d).getTime() - t0) / Math.max(t1 - t0, 1)) * (W - pad.l - pad.r);
-  const y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * (H - pad.t - pad.b);
-
-  // shade logged period days so she can see water-weight bumps line up
-  c.fillStyle = period + "1F";
-  const pw = Math.max(3, (W - pad.l - pad.r) / Math.max(1, (t1 - t0) / DAY_MS));
-  for (const [d, v] of Object.entries(state.days)) {
-    if (!BLEED.has(v.flow) || d < data[0].d || d > data.at(-1).d) continue;
-    c.fillRect(x(d) - pw / 2, pad.t, pw, H - pad.t - pad.b);
-  }
-
-  c.font = "11px 'DM Sans', sans-serif"; c.fillStyle = mid; c.strokeStyle = line; c.lineWidth = 1;
-  c.textAlign = "right"; c.textBaseline = "middle";
-  for (let i = 0; i <= 3; i++) {
-    const v = lo + ((hi - lo) * i) / 3, yy = y(v);
-    c.beginPath(); c.moveTo(pad.l, yy); c.lineTo(W - pad.r, yy); c.stroke();
-    c.fillText(Math.round(v), pad.l - 8, yy);
-  }
-  c.textAlign = "center"; c.textBaseline = "top";
-  c.fillText(md(data[0].d), x(data[0].d) + 14, H - pad.b + 8);
-  c.fillText(md(data.at(-1).d), x(data.at(-1).d) - 14, H - pad.b + 8);
-  if (state.goal != null) {
-    c.setLineDash([5, 5]); c.strokeStyle = mid; c.beginPath();
-    c.moveTo(pad.l, y(state.goal)); c.lineTo(W - pad.r, y(state.goal)); c.stroke(); c.setLineDash([]);
-    c.textAlign = "right"; c.textBaseline = "bottom"; c.fillText("goal", W - pad.r, y(state.goal) - 3);
-  }
-  const grad = c.createLinearGradient(0, pad.t, 0, H - pad.b);
-  grad.addColorStop(0, accent + "40"); grad.addColorStop(1, accent + "00");
-  c.beginPath(); c.moveTo(x(data[0].d), H - pad.b);
-  data.forEach((e) => c.lineTo(x(e.d), y(e.w)));
-  c.lineTo(x(data.at(-1).d), H - pad.b); c.closePath(); c.fillStyle = grad; c.fill();
-  c.beginPath(); data.forEach((e, i) => (i ? c.lineTo : c.moveTo).call(c, x(e.d), y(e.w)));
-  c.strokeStyle = accent; c.lineWidth = 2.5; c.lineJoin = "round"; c.stroke();
-
-  const idx = tapIdx ?? data.length - 1, p = data[Math.min(idx, data.length - 1)];
-  const px = x(p.d), py = y(p.w);
-  c.fillStyle = accent; c.beginPath(); c.arc(px, py, 5, 0, Math.PI * 2); c.fill();
-  c.strokeStyle = css("--card"); c.lineWidth = 2; c.stroke();
-  const txt = `${fmt(p.w)} · ${md(p.d)}`;
-  c.font = "600 12px 'DM Sans', sans-serif"; const tw = c.measureText(txt).width + 16;
-  const bx = Math.min(Math.max(px - tw / 2, pad.l), W - pad.r - tw), by = Math.max(py - 34, 0);
-  c.fillStyle = css("--ink"); c.beginPath(); c.roundRect(bx, by, tw, 24, 8); c.fill();
-  c.fillStyle = css("--card"); c.textAlign = "left"; c.textBaseline = "middle"; c.fillText(txt, bx + 8, by + 12);
-  cv._x = x; cv._data = data;
-}
-$("#chart").addEventListener("pointerdown", (e) => {
-  const cv = e.currentTarget; if (!cv._data) return;
-  const mx = e.clientX - cv.getBoundingClientRect().left;
-  let best = 0, bd = Infinity;
-  cv._data.forEach((d, i) => { const dd = Math.abs(cv._x(d.d) - mx); if (dd < bd) { bd = dd; best = i; } });
-  tapIdx = best; drawChart();
-});
-window.addEventListener("resize", () => render());
 
 /* ---------- CYCLE ---------- */
 const RC = 2 * Math.PI * 52;
@@ -343,9 +144,9 @@ function row(k, v, sub, lg) {
   return `<li><span class="k">${lg ? `<i class="lg ${lg}"></i>` : ""}${esc(k)}</span><span class="v">${esc(v)}${sub ? `<small>${esc(sub)}</small>` : ""}</span></li>`;
 }
 
-$("#log-today").onclick = () => openLog(ymd());
-$("#setup-btn").onclick = () => startOnboarding();
-$("#period-btn").onclick = () => {
+BIND["#log-today"] = () => openLog(ymd());
+BIND["#setup-btn"] = () => startOnboarding();
+BIND["#period-btn"] = () => {
   const t = ymd();
   state.days[t] ||= {};
   if (A.ready && A.inPeriod) {
@@ -364,8 +165,8 @@ $("#period-btn").onclick = () => {
 
 /* calendar */
 let calMonth = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })();
-$("#cal-prev").onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1); renderCalendar(); };
-$("#cal-next").onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1); renderCalendar(); };
+BIND["#cal-prev"] = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1); renderCalendar(); };
+BIND["#cal-next"] = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1); renderCalendar(); };
 
 function dayClasses(d) {
   const today = ymd(), cls = [];
@@ -535,166 +336,6 @@ function renderCycleList() {
   $("#cycle-list").innerHTML = items.join("");
 }
 
-/* ---------- WORKOUT ---------- */
-const todayId = () => SCHEDULE[new Date().getDay()] ?? "rest";
-let selectedDay = todayId();
-
-function gentleAuto() {
-  if (!A.ready || !A.inPeriod) return false;
-  const v = state.days[ymd()] || {};
-  return A.cd <= 2 || v.flow === "heavy" || (v.sym || []).includes("cramps");
-}
-const gentleToday = () => state.gentle[ymd()] ?? gentleAuto();
-
-function blocksFor(day, gentle) {
-  let b;
-  if (day.rest) b = [{ t: "Move", w: "Anywhere", items: day.items }, COOLDOWN];
-  else if (gentle) b = [GENTLE, COOLDOWN];
-  else b = [MOBILITY, { t: "Workout", w: "45–55 min", note: day.note || GROW_NOTE, items: day.items }, day.finish, COOLDOWN];
-  return b.map((blk, i) => ({ ...blk, key: `${i}` }));
-}
-const dayKey = (day, gentle) => (gentle && !day.rest ? `${day.id}~g` : day.id);
-function checksFor(key) { const r = state.checks[ymd()]; return r && r.day === key ? new Set(r.done) : new Set(); }
-function progress(day, gentle) {
-  const total = blocksFor(day, gentle).reduce((n, b) => n + b.items.length, 0);
-  const done = checksFor(dayKey(day, gentle)).size;
-  return { done, total, pct: Math.round((done / total) * 100) };
-}
-const CHECK_SVG = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>`;
-
-function renderWorkout() {
-  const today = todayId();
-  const day = DAYS.find((d) => d.id === selectedDay);
-  const isToday = day.id === today;
-  const gentle = isToday && !day.rest && gentleToday();
-
-  // phase banner
-  if (A.ready) {
-    $("#phase-banner").innerHTML = `<p class="label">${esc(PHASE[A.phase].name)} · cycle day ${A.cd}</p><p>${esc(PHASE_TRAIN[A.phase])}</p>
-      ${isToday && !day.rest ? `<label class="toggle"><span>Gentle version today</span><span class="switch"><input type="checkbox" id="gentle-sw" ${gentle ? "checked" : ""}><i></i></span></label>` : ""}`;
-    const sw = $("#gentle-sw");
-    if (sw) sw.onchange = () => { state.gentle[ymd()] = sw.checked; save(); renderWorkout(); };
-  } else {
-    $("#phase-banner").innerHTML = `<p class="label">Cycle-synced workouts</p><p>Set up your cycle and the workout tab adjusts to your phase.</p>`;
-  }
-
-  $("#rail").innerHTML = DAYS.map((d) => `<button data-id="${d.id}" class="${d.id === selectedDay ? "on" : ""} ${d.id === today ? "today" : ""}">${esc(d.tab)}</button>`).join("");
-  $$("#rail button").forEach((b) => (b.onclick = () => { selectedDay = b.dataset.id; renderWorkout(); }));
-  $("#rail .on")?.scrollIntoView({ inline: "center", block: "nearest" });
-
-  $("#day-title").textContent = gentle ? "Gentle day" : day.title;
-  $("#day-sub").textContent = isToday ? `Today · ${gentle ? `swapped from ${day.title}` : day.sub}` : day.sub;
-
-  const key = dayKey(day, gentle);
-  const done = checksFor(key);
-  $("#blocks").innerHTML = blocksFor(day, gentle).map((b) => {
-    const n = b.items.filter((_, i) => done.has(`${b.key}.${i}`)).length;
-    const all = n === b.items.length;
-    return `<details class="card block" ${all ? "" : "open"}>
-      <summary><div><div class="block-t">${esc(b.t)}</div><div class="block-w">${esc(b.w)}</div></div>
-      <span class="block-count ${all ? "done" : ""}">${n}/${b.items.length}</span></summary>
-      ${b.note ? `<p class="block-note">${esc(b.note)}</p>` : ""}
-      <ol class="ex">${b.items.map((it, i) => {
-        const k = `${b.key}.${i}`;
-        return `<li class="ex-row">${it.fig ? `<button type="button" class="fig" data-b="${b.key}" data-i="${i}" aria-label="Show ${esc(it.n)}">${figureSvg(it.fig)}</button>` : ""}
-          <label><input type="checkbox" data-k="${k}" ${done.has(k) ? "checked" : ""}><span class="check">${CHECK_SVG}</span>
-          <div class="ex-body"><div class="ex-top"><span class="ex-n">${esc(it.n)}</span></div><span class="ex-s">${esc(it.s)}</span>
-          ${it.note ? `<p class="ex-note">${esc(it.note)}</p>` : ""}</div></label></li>`;
-      }).join("")}</ol></details>`;
-  }).join("");
-
-  const blks = blocksFor(day, gentle);
-  $$("#blocks .fig").forEach((btn) => (btn.onclick = () => openFig(blks[+btn.dataset.b].items[+btn.dataset.i])));
-  $$("#blocks input[type=checkbox]").forEach((cb) => (cb.onchange = () => {
-    const d = ymd();
-    const rec = state.checks[d]?.day === key ? state.checks[d] : { day: key, done: [] };
-    const set = new Set(rec.done);
-    cb.checked ? set.add(cb.dataset.k) : set.delete(cb.dataset.k);
-    state.checks[d] = { day: key, done: [...set] };
-    save();
-    const p = progress(day, gentle);
-    if (p.done === p.total) toast("Workout complete — proud of you ♡");
-    if (navigator.vibrate) navigator.vibrate(8);
-    $("#day-bar").style.width = `${p.pct}%`;
-    $$(".block").forEach((el) => {
-      const items = el.querySelectorAll("input"), n = [...items].filter((i) => i.checked).length;
-      const tag = el.querySelector(".block-count"); tag.textContent = `${n}/${items.length}`; tag.classList.toggle("done", n === items.length);
-    });
-  }));
-  $("#day-bar").style.width = `${progress(day, gentle).pct}%`;
-}
-
-function openFig(it) {
-  const q = encodeURIComponent(`${it.n} exercise proper form`);
-  $("#fig-form").innerHTML = `
-    <div class="fig-big">${figureSvg(it.fig, true)}</div>
-    <h2>${esc(it.n)}</h2>
-    <p class="fig-sets">${esc(it.s)}</p>
-    ${it.note ? `<p class="muted">${esc(it.note)}</p>` : ""}
-    <a class="btn" href="https://www.youtube.com/results?search_query=${q}" target="_blank" rel="noopener">▶ Watch a video demo</a>
-    <button value="close" class="btn primary">Got it</button>`;
-  $("#figsheet").showModal();
-}
-
-/* ---------- HISTORY ---------- */
-function renderLog() {
-  const w = sorted().reverse();
-  $("#log-empty").hidden = w.length > 0;
-  $("#log-list").innerHTML = w.map((e, i) => {
-    const prev = w[i + 1], diff = prev ? e.w - prev.w : null;
-    return `<li><div><div class="log-w">${fmt(e.w)} lb</div><div class="log-date">${parse(e.d).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}</div></div>
-      <span class="log-d ${diff < 0 ? "down" : diff > 0 ? "up" : ""}">${diff == null ? "" : signed(diff)}</span>
-      <button class="del" data-d="${e.d}" aria-label="Delete">×</button></li>`;
-  }).join("");
-  $$("#log-list .del").forEach((b) => (b.onclick = () => {
-    if (!confirm("Delete this weigh-in?")) return;
-    state.weights = state.weights.filter((x) => x.d !== b.dataset.d); save(); renderLog();
-  }));
-}
-
-/* ---------- SETTINGS ---------- */
-const dlg = $("#settings");
-$("#settings-btn").onclick = () => {
-  const c = state.cycle;
-  $("#set-name").value = state.name ?? "";
-  $("#set-start").value = state.start ?? "";
-  $("#set-goal").value = state.goal ?? "";
-  $("#set-cycle").value = c.cycleLen; $("#set-period").value = c.periodLen;
-  $("#set-bc").value = c.bc; $("#set-goalmode").value = c.goal;
-  $("#set-temp").checked = !!c.trackTemp; $("#set-unit").value = c.tempUnit;
-  dlg.returnValue = ""; dlg.showModal();
-};
-dlg.addEventListener("close", () => {
-  if (dlg.returnValue !== "save") return;
-  const num = (v) => (v === "" ? null : parseFloat(v));
-  state.name = $("#set-name").value.trim() || "Madison";
-  state.start = num($("#set-start").value);
-  state.goal = num($("#set-goal").value);
-  const c = state.cycle;
-  c.cycleLen = Math.min(50, Math.max(18, parseInt($("#set-cycle").value) || 28));
-  c.periodLen = Math.min(10, Math.max(2, parseInt($("#set-period").value) || 5));
-  c.bc = $("#set-bc").value; c.goal = $("#set-goalmode").value;
-  c.trackTemp = $("#set-temp").checked; c.tempUnit = $("#set-unit").value;
-  save(); render(); toast("Saved");
-});
-$("#redo-setup").onclick = () => { dlg.close(); startOnboarding(); };
-$("#export-btn").onclick = () => {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = `bloom-backup-${ymd()}.json`; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-};
-$("#import-file").onchange = async (e) => {
-  const f = e.target.files[0]; if (!f) return;
-  try {
-    const data = JSON.parse(await f.text());
-    if (!Array.isArray(data.weights) || typeof data.days !== "object") throw 0;
-    const d = defaults();
-    state = { ...d, ...data, cycle: { ...d.cycle, ...(data.cycle || {}) } };
-    save(); dlg.close(); show("home"); toast("Backup restored");
-  } catch { toast("That file didn't work"); }
-};
-
 /* ---------- ONBOARDING (Flo-style setup questions) ---------- */
 const STEPS = [
   { key: "name", q: "Hi! What should I call you?", type: "text" },
@@ -777,12 +418,184 @@ function finishOnboarding() {
   show("cycle");
   toast(`All set, ${state.name} ♡`);
 }
-$("#ob-next").onclick = next;
-$("#ob-back").onclick = () => { if (ob) { ob--; renderStep(); } };
+BIND["#ob-next"] = next;
+BIND["#ob-back"] = () => { if (ob) { ob--; renderStep(); } };
 
-/* ---------- boot ---------- */
-show("home");
-if (!state.onboarded) startOnboarding();
-if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
-// re-render when she comes back to the app on a new day
-document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
+/* =========================================================
+   hooks into the shared app
+   ========================================================= */
+const CYCLE_HTML = `    
+    
+      <div class="panel cycle-hero">
+        <div class="cring-wrap">
+          <svg class="cring" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="52" class="cr-bg"/>
+            <circle cx="60" cy="60" r="52" class="cr-arc cr-fertile" id="cr-fertile" transform="rotate(-90 60 60)"/>
+            <circle cx="60" cy="60" r="52" class="cr-arc cr-period" id="cr-period" transform="rotate(-90 60 60)"/>
+            <circle r="3.6" class="cr-ov" id="cr-ov"/>
+            <circle r="6.5" class="cr-today" id="cr-today"/>
+          </svg>
+          <div class="cring-text">
+            <small id="cr-k"></small>
+            <span id="cr-big"></span>
+            <small id="cr-s"></small>
+          </div>
+        </div>
+        <div class="chips-row" id="cr-chips"></div>
+        <div class="hero-actions">
+          <button class="btn primary" id="log-today">Log today</button>
+          <button class="btn" id="period-btn">Period started</button>
+        </div>
+      </div>
+
+      <div class="panel" id="setup-card" hidden>
+        <h2>Let's set up your cycle</h2>
+        <p class="muted">Answer a few questions so predictions start right away.</p>
+        <button class="btn primary" id="setup-btn">Start</button>
+      </div>
+
+      <div class="panel" id="upcoming-card">
+        <div class="card-head"><h2>Coming up</h2></div>
+        <ul class="rows" id="upcoming"></ul>
+        <p class="fine" id="basis"></p>
+      </div>
+
+      <div class="panel phase-card" id="phase-card">
+        <p class="label" id="phase-label"></p>
+        <h2 id="phase-title"></h2>
+        <p id="phase-body"></p>
+      </div>
+
+      <div class="panel">
+        <div class="card-head">
+          <button class="icon-sm" id="cal-prev" aria-label="Previous month">‹</button>
+          <h2 id="cal-title"></h2>
+          <button class="icon-sm" id="cal-next" aria-label="Next month">›</button>
+        </div>
+        <div class="cal-week"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="legend">
+          <span><i class="lg period"></i>Period</span>
+          <span><i class="lg pred"></i>Predicted</span>
+          <span><i class="lg fertile"></i>Fertile</span>
+          <span><i class="lg ov"></i>Ovulation</span>
+        </div>
+        <p class="fine">Tap any past day to log it.</p>
+      </div>
+
+      <div class="panel" id="temp-card" hidden>
+        <div class="card-head"><h2>Temperature</h2><span class="muted small" id="temp-sub"></span></div>
+        <div class="chart-wrap small"><canvas id="temp-chart"></canvas></div>
+      </div>
+
+      <div class="panel">
+        <div class="card-head"><h2>Insights</h2></div>
+        <div class="stat-grid four" id="ins-stats"></div>
+        <ul class="flags" id="ins-flags"></ul>
+        <h3>Your patterns</h3>
+        <ul class="rows" id="ins-patterns"></ul>
+        <h3>Cycle length</h3>
+        <div class="chart-wrap small"><canvas id="len-chart"></canvas><p class="empty" id="len-empty">Shows up after two logged periods.</p></div>
+      </div>
+
+      <div class="panel">
+        <div class="card-head"><h2>Cycle history</h2></div>
+        <ul class="log-list" id="cycle-list"></ul>
+      </div>
+
+      <p class="disclaimer">Predictions are estimates, not medical advice, and they are not a form of birth control.</p>
+
+  <!-- EXERCISE PICTURE -->
+  <dialog id="figsheet">
+    <form method="dialog" class="sheet fig-sheet" id="fig-form"></form>
+  </dialog>
+
+  
+`;
+const OB_HTML = `<dialog id="logsheet">
+    <form method="dialog" class="sheet" id="log-form"></form>
+  </dialog>
+  
+  <section id="onboard" hidden>
+    <div class="ob-dots" id="ob-dots"></div>
+    <div class="ob-body" id="ob-body"></div>
+    <div class="ob-foot">
+      <button class="btn" id="ob-back">Back</button>
+      <button class="btn primary" id="ob-next">Next</button>
+    </div>
+  </section>
+
+  
+`;
+
+function gentleAuto() {
+  if (!A?.ready || !A.inPeriod) return false;
+  const v = state.days[ymd()] || {};
+  return A.cd <= 2 || v.flow === "heavy" || (v.sym || []).includes("cramps");
+}
+const gentleToday = () => state.gentle[ymd()] ?? gentleAuto();
+
+export const cycleExtra = {
+  defaults: {
+    days: {}, gentle: {}, onboarded: false,
+    cycle: { lastStart: null, periodLen: 5, cycleLen: 28, regular: "unsure", bc: "none", goal: "track", trackTemp: false, tempUnit: "F" },
+  },
+  tabs: [{ id: "cycle", html: CYCLE_HTML, chrome: OB_HTML, render: () => renderCycle() }],
+  init(ctx) { C = ctx; refresh(); for (const [sel, fn] of Object.entries(BIND)) { const el = $(sel); if (el) el.onclick = fn; } },
+  beforeRender() { refresh(); },
+  boot() { if (!state.onboarded) startOnboarding(); },
+
+  homeTop() {
+    const pill = !A.ready
+      ? `<span class="dot"></span><span><b>Cycle</b> · ${state.onboarded ? "Log your period to start predictions" : "Tap to set up your cycle"}</span>`
+      : `<span class="dot ${A.phase}"></span><span><b>Cycle day ${A.cd}</b> · ${esc(headline())}</span>`;
+    return `<button class="pill" id="cycle-pill">${pill}</button>`;
+  },
+  bindHome() { $("#cycle-pill").onclick = () => (state.onboarded ? show("cycle") : startOnboarding()); },
+
+  trainOpts: (ctx, day) => ({ gentle: !day.rest && gentleToday() }),
+  todayTitle: (ctx, day, opts) => (opts.gentle ? "Gentle day" : day.title),
+  trainBanner(ctx, day, isToday, opts) {
+    if (!A.ready) return `<div class="panel phase-banner"><p class="label">Cycle-synced workouts</p><p>Set up your cycle and your training tips change with your phase.</p></div>`;
+    return `<div class="panel phase-banner"><p class="label">${esc(PHASE[A.phase].name)} · cycle day ${A.cd}</p><p>${esc(PHASE_TRAIN[A.phase])}</p>
+      ${isToday && !day.rest ? `<label class="toggle"><span>Gentle version today</span><span class="switch"><input type="checkbox" id="gentle-sw" ${opts.gentle ? "checked" : ""}><i></i></span></label>` : ""}</div>`;
+  },
+  bindTrainBanner(ctx, rerender) {
+    const sw = $("#gentle-sw");
+    if (sw) sw.onchange = () => { state.gentle[ymd()] = sw.checked; save(); rerender(); };
+  },
+  bodyNote() {
+    return A.ready && ["pms", "menstrual", "late"].includes(A.phase)
+      ? `<p class="note">Before and during your period, water retention can add 1–5 lb on the scale. It's not fat — trust the trend line.</p>` : "";
+  },
+  chartUnderlay(ctx, c, { x, pad, W, H, data }) {
+    c.fillStyle = css("--period") + "22";
+    const t0 = data[0].d, t1 = data.at(-1).d;
+    const pw = Math.max(3, (W - pad.l - pad.r) / Math.max(1, between(t0, t1)));
+    for (const [d, v] of Object.entries(state.days)) if (BLEED.has(v.flow) && d >= t0 && d <= t1) c.fillRect(x(d) - pw / 2, pad.t, pw, H - pad.t - pad.b);
+  },
+  settingsHtml() {
+    const c = state.cycle;
+    return `<h3>Cycle</h3>
+      <div class="sheet-row"><label>Usual cycle (days)<input id="set-cycle" type="number" min="18" max="50" inputmode="numeric" value="${c.cycleLen}"></label>
+        <label>Usual period (days)<input id="set-period" type="number" min="2" max="10" inputmode="numeric" value="${c.periodLen}"></label></div>
+      <label>Birth control<select id="set-bc">
+        <option value="none" ${c.bc === "none" ? "selected" : ""}>None / condoms only</option>
+        <option value="hormonal" ${c.bc === "hormonal" ? "selected" : ""}>Hormonal (pill, patch, ring, shot, implant, hormonal IUD)</option>
+        <option value="copper" ${c.bc === "copper" ? "selected" : ""}>Copper IUD</option></select></label>
+      <label>Using the tracker to<select id="set-goalmode">
+        <option value="track" ${c.goal === "track" ? "selected" : ""}>Track my cycle &amp; symptoms</option>
+        <option value="conceive" ${c.goal === "conceive" ? "selected" : ""}>Get pregnant</option></select></label>
+      <div class="sheet-row"><label class="switch-row"><input type="checkbox" id="set-temp" ${c.trackTemp ? "checked" : ""}> Log temp &amp; ovulation tests</label>
+        <label>Temp unit<select id="set-unit"><option value="F" ${c.tempUnit === "F" ? "selected" : ""}>°F</option><option value="C" ${c.tempUnit === "C" ? "selected" : ""}>°C</option></select></label></div>
+      <button type="button" class="btn" id="redo-setup">Redo cycle setup questions</button>`;
+  },
+  bindSettings(ctx, f) { $("#redo-setup", f).onclick = () => { $("#sheet").close(); startOnboarding(); }; },
+  saveSettings() {
+    const c = state.cycle;
+    c.cycleLen = Math.min(50, Math.max(18, parseInt($("#set-cycle").value) || 28));
+    c.periodLen = Math.min(10, Math.max(2, parseInt($("#set-period").value) || 5));
+    c.bc = $("#set-bc").value; c.goal = $("#set-goalmode").value;
+    c.trackTemp = $("#set-temp").checked; c.tempUnit = $("#set-unit").value;
+  },
+};

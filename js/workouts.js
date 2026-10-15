@@ -47,15 +47,15 @@ export const GENTLE = {
 export const DAYS = [
   { id: "glutesA", tab: "Glutes (heavy)", title: "Glutes — heavy", sub: "Booty day 1 · build strength",
     items: [
-      { n: "Smith machine hip thrust", s: "4 × 8–10", fig: "hipThrust",
+      { n: "Smith machine hip thrust", s: "4 × 8–10", w: true, fig: "hipThrust",
         note: "The #1 booty builder. Put a flat bench sideways behind the Smith machine, grab a bar pad from the front desk, sit with the bar over your hips. The bar runs on rails so you don't balance anything. Chin tucked, drive through heels, 1-sec squeeze at the top." },
-      { n: "Leg press — feet high & wide", s: "4 × 10", fig: "legPress",
+      { n: "Leg press — feet high & wide", s: "4 × 10", w: true, fig: "legPress",
         note: "Feet high and wide on the platform = more glute and hamstring. Lower until your knees are near your chest, don't let your lower back lift off the pad." },
-      { n: "Smith machine split squat", s: "3 × 8 / leg", fig: "smithSplit",
+      { n: "Smith machine split squat", s: "3 × 8 / leg", w: true, fig: "smithSplit",
         note: "Bar on your upper back, one foot forward, one back. Drop your back knee toward the floor, lean slightly forward for more glute." },
-      { n: "Cable glute kickback", s: "3 × 12 / leg", fig: "kickback",
+      { n: "Cable glute kickback", s: "3 × 12 / leg", w: true, fig: "kickback",
         note: "Cable tower: ankle strap on the low pulley. Hold the frame, kick back and slightly out, squeeze at the top. Don't arch your lower back." },
-      { n: "Hip abductor machine — lean forward", s: "3 × 15–20", fig: "abduction",
+      { n: "Hip abductor machine — lean forward", s: "3 × 15–20", w: true, fig: "abduction",
         note: "Push knees out. Leaning your chest forward over your thighs hits the upper glute (the 'shelf')." },
       { n: "Banded frog pump", s: "2 × 25", fig: "bridge", note: "On a mat, soles of feet together, knees out, fast squeezes. Burnout finisher." },
     ],
@@ -66,14 +66,14 @@ export const DAYS = [
   { id: "arms", tab: "Arms & back", title: "Arms & back", sub: "Toned arms · posture",
     note: "Toned arms come from building a little muscle, not from tiny weights for 50 reps. Pick a pin where the last 2 reps are hard.",
     items: [
-      { n: "Lat pulldown machine", s: "3 × 10", fig: "pulldown", note: "Pull the bar to your upper chest, elbows down and back. A strong back makes arms look leaner." },
-      { n: "Seated row machine", s: "3 × 10", fig: "seatedRow", note: "Chest on the pad, pull handles to your ribs, squeeze shoulder blades together." },
-      { n: "Shoulder press machine", s: "3 × 10", fig: "press", note: "Back flat on the pad, press straight up, don't shrug." },
-      { n: "Cable lateral raise", s: "3 × 12–15 / arm", fig: "lateral", note: "Low pulley, handle in the far hand. Raise out to the side to shoulder height. Light and slow." },
-      { n: "Triceps rope pushdown", s: "3 × 12", fig: "pushdown", note: "High pulley + rope. Elbows pinned to your sides, spread the rope at the bottom. This tones the back of the arm." },
-      { n: "Overhead cable triceps extension", s: "3 × 12", fig: "overheadCable", note: "Face away from the cable, rope behind your head, straighten your arms forward and up. Big stretch on the back of the arm." },
-      { n: "Biceps curl machine", s: "3 × 12", fig: "machineCurl", note: "Arms flat on the pad, curl up, lower slowly (2–3 sec)." },
-      { n: "Cable curl", s: "2 × 12", fig: "cableCurl", note: "Low pulley with the straight bar or rope. Elbows stay at your sides." },
+      { n: "Lat pulldown machine", s: "3 × 10", w: true, fig: "pulldown", note: "Pull the bar to your upper chest, elbows down and back. A strong back makes arms look leaner." },
+      { n: "Seated row machine", s: "3 × 10", w: true, fig: "seatedRow", note: "Chest on the pad, pull handles to your ribs, squeeze shoulder blades together." },
+      { n: "Shoulder press machine", s: "3 × 10", w: true, fig: "press", note: "Back flat on the pad, press straight up, don't shrug." },
+      { n: "Cable lateral raise", s: "3 × 12–15 / arm", w: true, fig: "lateral", note: "Low pulley, handle in the far hand. Raise out to the side to shoulder height. Light and slow." },
+      { n: "Triceps rope pushdown", s: "3 × 12", w: true, fig: "pushdown", note: "High pulley + rope. Elbows pinned to your sides, spread the rope at the bottom. This tones the back of the arm." },
+      { n: "Overhead cable triceps extension", s: "3 × 12", w: true, fig: "overheadCable", note: "Face away from the cable, rope behind your head, straighten your arms forward and up. Big stretch on the back of the arm." },
+      { n: "Biceps curl machine", s: "3 × 12", w: true, fig: "machineCurl", note: "Arms flat on the pad, curl up, lower slowly (2–3 sec)." },
+      { n: "Cable curl", s: "2 × 12", w: true, fig: "cableCurl", note: "Low pulley with the straight bar or rope. Elbows stay at your sides." },
     ],
     finish: { t: "Core", w: "8 min", items: [
       { n: "Dead bug", s: "3 × 8 / side", fig: "deadbug", note: "On a mat. Lower back stays glued to the floor." },
@@ -82,7 +82,7 @@ export const DAYS = [
 
   { id: "mobility", tab: "Hips & ankles", title: "Hips & ankles", sub: "Mobility + strength · lighter day",
     items: [
-      { n: "Hip adductor machine", s: "3 × 15", fig: "adductor", note: "Squeeze knees in slowly. Strong inner thighs = stable hips and knees." },
+      { n: "Hip adductor machine", s: "3 × 15", w: true, fig: "adductor", note: "Squeeze knees in slowly. Strong inner thighs = stable hips and knees." },
       { n: "Cossack squat (hold the Smith bar)", s: "3 × 6 / side", fig: "cossack", note: "Set the Smith bar at chest height and hold it. Wide stance, sit into one hip, other leg straight with toes up." },
       { n: "Deep squat hold (hold the Smith bar)", s: "3 × 30 sec", fig: "squatHold", note: "Hold the bar, sit all the way down, heels flat, knees out. Opens hips and ankles." },
       { n: "Single-leg calf raise on a step", s: "3 × 12 / leg", fig: "calfRaise", note: "Hold a rail, heel drops below the step, pause at the top. Stronger ankles, nicer calves." },
@@ -96,26 +96,26 @@ export const DAYS = [
 
   { id: "legs", tab: "Legs & glutes", title: "Legs & glutes", sub: "Booty day 2 · volume",
     items: [
-      { n: "Smith machine squat — feet forward", s: "4 × 10", fig: "smithSquat", note: "Bar on your upper back, feet a little in front of the bar, shoulder-width. Sit down and back, knees track over toes." },
-      { n: "Single-leg leg press", s: "3 × 10 / leg", fig: "legPress", note: "One foot in the middle-high of the platform. Lighter weight, full depth." },
+      { n: "Smith machine squat — feet forward", s: "4 × 10", w: true, fig: "smithSquat", note: "Bar on your upper back, feet a little in front of the bar, shoulder-width. Sit down and back, knees track over toes." },
+      { n: "Single-leg leg press", s: "3 × 10 / leg", w: true, fig: "legPress", note: "One foot in the middle-high of the platform. Lighter weight, full depth." },
       { n: "45° back extension — glute version", s: "3 × 12", fig: "backExt", note: "Pad at your hip bones, feet turned out, round your upper back slightly and squeeze glutes to come up. Stop when your body is straight." },
-      { n: "Seated leg curl machine", s: "3 × 12", fig: "legCurl", note: "Slow on the way back (3 sec)." },
-      { n: "Leg extension machine", s: "3 × 12", fig: "legExt", note: "Squeeze at the top, lower slowly." },
-      { n: "Calf raise on the leg press", s: "3 × 15", fig: "legPressCalf", note: "Legs straight, balls of feet on the edge of the platform, push through your toes." },
+      { n: "Seated leg curl machine", s: "3 × 12", w: true, fig: "legCurl", note: "Slow on the way back (3 sec)." },
+      { n: "Leg extension machine", s: "3 × 12", w: true, fig: "legExt", note: "Squeeze at the top, lower slowly." },
+      { n: "Calf raise on the leg press", s: "3 × 15", w: true, fig: "legPressCalf", note: "Legs straight, balls of feet on the edge of the platform, push through your toes." },
     ],
     finish: { t: "Finisher", w: "5 min", items: [
-      { n: "Hip abductor machine", s: "2 × 20", fig: "abduction", note: "Pulse at the end of the last set." },
+      { n: "Hip abductor machine", s: "2 × 20", w: true, fig: "abduction", note: "Pulse at the end of the last set." },
     ] } },
 
   { id: "glutesB", tab: "Glutes & arms", title: "Glutes & arms", sub: "Booty day 3 · pump",
     items: [
-      { n: "Smith machine hip thrust (pause)", s: "3 × 12", fig: "hipThrust", note: "Lighter than Monday, 2-sec pause at the top every rep." },
-      { n: "Cable pull-through", s: "3 × 12", fig: "pullThrough", note: "Low pulley + rope, face away, rope between your legs. Push hips back, then snap them forward and squeeze." },
+      { n: "Smith machine hip thrust (pause)", s: "3 × 12", w: true, fig: "hipThrust", note: "Lighter than Monday, 2-sec pause at the top every rep." },
+      { n: "Cable pull-through", s: "3 × 12", w: true, fig: "pullThrough", note: "Low pulley + rope, face away, rope between your legs. Push hips back, then snap them forward and squeeze." },
       { n: "Banded donkey kick", s: "3 × 15 / leg", fig: "donkey", note: "On a mat on all fours, band around your knees. Keep the knee bent and push your foot to the ceiling." },
-      { n: "Hip abductor machine — sit upright", s: "3 × 15", fig: "abduction", note: "Sitting tall hits the middle of the glute (Monday's lean hits the top)." },
-      { n: "Chest press machine", s: "3 × 10", fig: "chestPress", note: "Handles at chest height, push out, don't lock your elbows." },
-      { n: "Triceps rope pushdown", s: "3 × 12", fig: "pushdown" },
-      { n: "Rear delt fly machine", s: "3 × 15", fig: "revFly", note: "Face the pad, pull arms out wide. Shapes the back of the shoulders and helps posture." },
+      { n: "Hip abductor machine — sit upright", s: "3 × 15", w: true, fig: "abduction", note: "Sitting tall hits the middle of the glute (Monday's lean hits the top)." },
+      { n: "Chest press machine", s: "3 × 10", w: true, fig: "chestPress", note: "Handles at chest height, push out, don't lock your elbows." },
+      { n: "Triceps rope pushdown", s: "3 × 12", w: true, fig: "pushdown" },
+      { n: "Rear delt fly machine", s: "3 × 15", w: true, fig: "revFly", note: "Face the pad, pull arms out wide. Shapes the back of the shoulders and helps posture." },
     ],
     finish: { t: "Cardio", w: "10 min", items: [
       { n: "Bike intervals", s: "10 min: 30 sec hard / 60 sec easy", fig: "bike" },
@@ -162,3 +162,29 @@ export const PHASE_TRAIN = {
   late: "Train as normal and go by feel.",
   hormonal: "Train by feel.",
 };
+
+/* ---------- how a day is built ---------- */
+import { makePlan } from "./plan.js";
+export const PLAN = makePlan({
+  DAYS, SCHEDULE,
+  blocks: (day, opts = {}) => {
+    if (day.rest) return [{ t: "Move", w: "Anywhere", main: true, items: day.items }, COOLDOWN];
+    if (opts.gentle) return [{ ...GENTLE, main: true }, COOLDOWN];
+    return [
+      { ...MOBILITY, main: true },
+      { t: "Workout", w: "45–55 min", main: true, lift: true, note: day.note || GROW_NOTE, items: day.items },
+      { ...day.finish, main: true },
+      COOLDOWN,
+    ];
+  },
+});
+
+// Default daily stretch quest (editable in the app). fig = picture.
+export const DEFAULT_MOVES = [
+  { id: "m-9090", n: "90/90 hip switch", s: "2 × 8 / side", fig: "ninety" },
+  { id: "m-ankle", n: "Knee-to-wall ankle rock", s: "2 × 10 / side", fig: "ankleRock" },
+  { id: "m-pigeon", n: "Pigeon stretch", s: "45 sec / side", fig: "pigeon" },
+  { id: "m-couch", n: "Couch stretch", s: "45 sec / side", fig: "couch" },
+  { id: "m-bridge", n: "Banded glute bridge", s: "2 × 15", fig: "bridge" },
+  { id: "m-calf", n: "Wall calf stretch", s: "30 sec / side", fig: "calfStretch" },
+];
